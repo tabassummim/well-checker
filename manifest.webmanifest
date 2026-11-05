@@ -1,12 +1,12 @@
 {
- "name": "Tubewell Depth Screening (Bangladesh)",
- "short_name": "Tubewell Screen",
+ "name": "Tubewell Check / নলকূপ যাচাই",
+ "short_name": "নলকূপ যাচাই",
  "start_url": "./",
  "scope": "./",
  "display": "standalone",
  "background_color": "#fcfcfb",
  "theme_color": "#1f4f8a",
- "description": "Offline screening map of tubewell depths for arsenic, manganese and high sodium. Screening aid only.",
+ "description": "Which tubewell depths may have arsenic, manganese or too much salt. A guide only; always test the water.",
  "icons": [
   {
    "src": "icons/icon-192.png",
