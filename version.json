@@ -1,0 +1,8 @@
+{
+ "data_version": "2026-11-05.1",
+ "app_version": "1.0.0",
+ "data_file": "data/grid-2026-11-05.1.json",
+ "published": "2026-11-05",
+ "notes": "First release.",
+ "source": "BGS/DPHE National Hydrochemical Survey 1998-99; Step 5 saved tool (strat_u01)"
+}

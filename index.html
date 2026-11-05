@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tubewell Depth Screening</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1f4f8a">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+/* One visual world (light only, by choice): label colours were validated for colour-blind separation on this surface.
+   Layout: a warning strip, then map (left) beside the depth ladder for the chosen cell (right); stacks on phones. */
+:root {
+  color-scheme: light;
+  --surface: #fcfcfb; --panel: #f3f3f0; --ink: #16181a; --ink-2: #4d5156; --rule: #d9d9d3;
+  --unsafe: #D4572A; --nro: #2F6DB5; --unknown: #878787; --nowin: #d9d8d4; --focus: #1f4f8a;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", sans-serif; --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--surface); color: var(--ink); font: 15px/1.45 var(--body); }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; margin: 0; text-wrap: balance; }
+h1 { font-size: 26px; letter-spacing: .01em; }
+h2 { font-size: 19px; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 16px 20px 28px; display: grid; gap: 14px; }
+.warn { border-left: 5px solid var(--unsafe); background: #fbefe9; padding: 10px 14px; border-radius: 4px; display: grid; gap: 4px; }
+.warn strong { font-weight: 600; }
+.sub { color: var(--ink-2); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font: 500 14px var(--body); border: 0; background: #fff; color: var(--ink); padding: 6px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+label.ctl { display: inline-flex; gap: 8px; align-items: center; font-weight: 500; }
+input[type=number] { width: 92px; font: 14px var(--mono); padding: 5px 6px; border: 1px solid var(--rule); border-radius: 4px; }
+.go { font: 500 14px var(--body); padding: 6px 12px; border-radius: 6px; border: 1px solid var(--ink); background: #fff; cursor: pointer; }
+.main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 860px) { .main { grid-template-columns: 1fr; } }
+.mapbox { background: #fff; border: 1px solid var(--rule); border-radius: 6px; padding: 10px; display: grid; gap: 8px; }
+canvas { width: 100%; height: auto; display: block; cursor: crosshair; touch-action: manipulation; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13.5px; }
+.sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 6px; }
+.hatch { background: repeating-linear-gradient(45deg, #fff 0 3px, #555 3px 4.5px); border: 1px solid #555; }
+.mapnote { font-size: 13px; color: var(--ink-2); }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; display: grid; gap: 12px; }
+.where { font: 14px var(--mono); color: var(--ink-2); }
+.verdict { font-family: var(--display); font-size: 22px; font-weight: 600; padding: 8px 12px; border-radius: 4px; background: #fff; border: 1px solid var(--rule); }
+.verdict.none { border-left: 6px solid var(--unknown); }
+.verdict.some { border-left: 6px solid var(--nro); }
+.flags { display: grid; gap: 4px; font-size: 13.5px; }
+.flag { background: #fff; border: 1px dashed #b8b8b0; border-radius: 4px; padding: 5px 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; background: #fff; }
+th, td { padding: 5px 7px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: middle; }
+th { font-weight: 600; color: var(--ink-2); font-size: 12.5px; }
+td.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+.chip { display: inline-block; padding: 1px 8px 2px; border-radius: 10px; color: #fff; font-weight: 500; font-size: 12.5px; white-space: nowrap; }
+.chip.c0 { background: var(--unsafe); } .chip.c1 { background: var(--nro); } .chip.c2 { background: var(--unknown); }
+tr.deep td { color: var(--ink-2); }
+.tablewrap { overflow-x: auto; }
+.read { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.read div { background: #fff; border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; font-size: 14px; }
+.read h3 { font-size: 16px; margin-bottom: 4px; }
+footer { font-size: 12.5px; color: var(--ink-2); max-width: 75ch; }
+#tip { position: fixed; pointer-events: none; background: var(--ink); color: #fff; font-size: 12.5px; padding: 5px 8px; border-radius: 4px; display: none; z-index: 5; max-width: 260px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+.status { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13.5px; background: #fff; border: 1px solid var(--rule); border-radius: 6px; padding: 7px 10px; }
+.pill { font-weight: 600; padding: 1px 9px; border-radius: 10px; color: #fff; background: #878787; }
+.pill.on { background: #2e7d4f; } .pill.off { background: #8a5a00; }
+.ok { color: #2e7d4f; font-weight: 500; } .warnt { color: #8a5a00; font-weight: 500; }
+.upd { background: #e7f1fb; border-left: 5px solid var(--nro); padding: 8px 12px; border-radius: 4px; }
+.go.small { padding: 2px 8px; font-size: 12.5px; }
+#appbody { display: grid; gap: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header style="display:grid;gap:6px">
+    <h1>Tubewell depth screening map, Bangladesh</h1>
+    <div class="sub">Labels from a statistical model trained on the 1998-99 National Hydrochemical Survey (3,534 wells). Tap any cell to see its depth profile. Works offline after the first visit.</div>
+  </header>
+  <div class="status" role="status">
+    <span id="net" class="pill">...</span>
+    <span>Data version <b id="dver">-</b> (published <span id="ddate">-</span>)</span>
+    <span id="saved" class="warnt"></span>
+    <span class="sub">Last update check: <span id="checked">not yet</span> <button class="go small" id="checknow">Check now</button></span>
+  </div>
+  <div id="upd" class="upd" hidden></div>
+  <div id="loading" class="sub">Loading saved data...</div>
+  <div id="appbody" hidden>
+
+  <div class="warn" role="note">
+    <div><strong>Screening aid only. No label here certifies that water may be drunk.</strong> "Within limits" covers arsenic, manganese and sodium only; bacteria, nitrate and everything else are not in the data. The survey is from 1998-99.</div>
+    <div>"Not ruled out" is weak: in held-out testing about 59% of wells labelled this way were <em>not</em> within limits. Treat it as a reason to send a sample to a laboratory, nothing more. Most answers are "unknown" or "no window", and that is the honest result.</div>
+  </div>
+
+  <div class="controls">
+    <span class="seg" role="group" aria-label="Limits">
+      <button id="set-strict" aria-pressed="true">Strict (WHO-based)</button><button id="set-local" aria-pressed="false">Local (Bangladesh)</button>
+    </span>
+    <span class="seg" role="group" aria-label="Map shows">
+      <button id="view-depth" aria-pressed="true">Label at one depth</button><button id="view-win" aria-pressed="false">Any window</button>
+    </span>
+    <label class="ctl" for="depth">Depth <input id="depth" type="range" min="0" max="9" step="1" value="1" aria-describedby="depthval"> <span id="depthval" style="font-family:var(--mono)">20 m</span></label>
+  </div>
+  <div id="setdesc" class="sub" style="font-size:13.5px"></div>
+
+  <div class="main">
+    <div class="mapbox">
+      <canvas id="map" width="760" height="900" aria-label="Map of Bangladesh coloured by screening label"></canvas>
+      <div class="legend" id="legend"></div>
+      <div class="mapnote">Each square is a 0.05-degree cell (about 5 km), computed at its centre. Straight north-south or east-west edges come from the model's splits on latitude and longitude, not from mapped geology. Outlines are approximate.</div>
+      <form id="find" class="controls" autocomplete="off">
+        <label class="ctl" for="lat">Lat <input id="lat" type="number" step="0.001" min="20.6" max="26.7" value="22.800"></label>
+        <label class="ctl" for="lon">Lon <input id="lon" type="number" step="0.001" min="88" max="92.75" value="89.500"></label>
+        <button class="go" type="submit">Show this place</button>
+        <span id="finderr" class="sub" style="font-size:13px"></span>
+      </form>
+    </div>
+
+    <section class="panel" aria-live="polite">
+      <div style="display:grid;gap:2px">
+        <h2 id="ptitle">Depth profile</h2>
+        <div class="where" id="pwhere"></div>
+      </div>
+      <div class="verdict" id="verdict"></div>
+      <div class="flags" id="flags"></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Depth</th><th>Label</th><th style="text-align:right">P(within)</th><th style="text-align:right" title="Surveyed training wells within 25 km and within 30% of this depth">Similar wells ≤25 km</th><th style="text-align:right">Nearest similar km</th><th title="Descriptive, not a conformal label">Limiting</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="sub" style="font-size:13px">P(within) is the model's probability that all three parameters are within the chosen limits. The label comes from conformal thresholds, not from P alone being high or low. "Limiting" is the parameter with the lowest single-parameter probability (As arsenic, Mn manganese, Na high sodium, possible salinity concern); it is descriptive, not a conformal label. Depths below 150 m are always "unknown" in this tool: the deep calibration wells were too few to exclude either outcome, which says nothing about the water there. For an exact point use <code>step6_profile.py</code>.</div>
+    </section>
+  </div>
+
+  <section class="read">
+    <div><h3>Probably not within limits</h3>The model excludes "within limits" at this depth. In testing it caught about 97% of wells that were truly over a limit with this label or "unknown".</div>
+    <div><h3>Not ruled out</h3>The model cannot exclude "within limits". Rare (about 1% of cells at 10-20 m) and weak evidence. A lead for a laboratory test only.</div>
+    <div><h3>Unknown</h3>The model cannot decide. This is the most common label. Nothing is filled in between depths.</div>
+    <div><h3>Window</h3>A run of consecutive "not ruled out" depths on the grid 10, 20, 30, 50, 75, 100, 150 m. "No window" is the usual answer. Window edges are uncertain by one grid step.</div>
+    <div><h3>Below 150 m (not judged by the model)</h3>This note comes from the survey summary and published studies, not from the model. High arsenic is rare below 150 m: in this survey 0.9% of the 326 deep wells were above 50 µg/L. But 49% of them had sodium above 200 mg/L, mostly in the coastal south, and heavy deep pumping can pull arsenic down over years. A deep well still needs a laboratory test and regular re-testing.</div>
+  </section>
+
+  <footer>Data: BGS and DPHE. 2001. <em>Arsenic contamination of groundwater in Bangladesh.</em> Kinniburgh, D G, and Smedley, P L (editors). British Geological Survey Technical Report WC/00/19. (Nottingham, UK: British Geological Survey.) Model: Step 5 saved tool, variant strat_u01 (depth-stratified conformal thresholds, unsafe class at 99% target coverage). Strict = arsenic 10 µg/L, manganese 0.08 mg/L, sodium 200 mg/L; Local = arsenic 50 µg/L, manganese 0.1 mg/L, sodium 200 mg/L. Sodium results are "high sodium (possible salinity concern)". Sodium above 200 mg/L can come from seawater-related salinity or from fresh sodium-bicarbonate water; the survey has no chloride, so this tool cannot tell which.</footer>
+</div>
+</div>
+<div id="tip"></div>
+<script>
+window.__startMap = function (D) {
+  const COL = ["#D4572A", "#2F6DB5", "#878787"], NOWIN = "#d9d8d4";
+  const NAME = ["probably not within limits", "not ruled out", "unknown"];
+  const LIM = { as: "As", mn: "Mn", na: "Na" };
+  const SETS = { strict: "Strict: arsenic 10 µg/L (WHO), manganese 0.08 mg/L (WHO provisional), sodium 200 mg/L (Bangladesh).",
+                 local: "Local: arsenic 50 µg/L, manganese 0.1 mg/L, sodium 200 mg/L (Bangladesh standards)." };
+  const state = { set: "strict", view: "depth", di: 1, cell: null };
+  const cv = document.getElementById("map"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height, LON0 = 88.0, LON1 = 92.75, LAT0 = 20.6, LAT1 = 26.7;
+  const index = new Map(); D.i.forEach((ii, k) => index.set(ii * 1000 + D.j[k], k));
+  const kx = W / (LON1 - LON0), ky = H / (LAT1 - LAT0);
+  const X = lon => (lon - LON0) * kx, Y = lat => H - (lat - LAT0) * ky;
+  const cellLat = k => +(D.lat0 + D.i[k] * D.step).toFixed(2), cellLon = k => +(D.lon0 + D.j[k] * D.step).toFixed(2);
+  const far = k => D.geoKm[k] > 40;
+  const hasWin = (set, k) => D.lab[set][k].indexOf("1") >= 0;
+
+  let hatch = null;
+  (function () { const c = document.createElement("canvas"); c.width = c.height = 6; const g = c.getContext("2d");
+    g.strokeStyle = "rgba(30,30,30,.75)"; g.lineWidth = 1.1; g.beginPath(); g.moveTo(0, 6); g.lineTo(6, 0); g.stroke(); hatch = ctx.createPattern(c, "repeat"); })();
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H); ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+    const s = D.step, cw = s * kx + 0.6, ch = s * ky + 0.6;
+    for (let k = 0; k < D.i.length; k++) {
+      const la = D.lat0 + D.i[k] * s, lo = D.lon0 + D.j[k] * s;
+      let c;
+      if (state.view === "depth") c = COL[+D.lab[state.set][k][state.di]];
+      else c = hasWin(state.set, k) ? COL[1] : NOWIN;
+      ctx.fillStyle = c; ctx.fillRect(X(lo - s / 2), Y(la + s / 2), cw, ch);
+      if (state.view === "win" && far(k)) { ctx.fillStyle = hatch; ctx.fillRect(X(lo - s / 2), Y(la + s / 2), cw, ch); }
+    }
+    ctx.lineJoin = "round";
+    const line = (pts, col, w) => { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); pts.forEach((p, n) => n ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))); ctx.stroke(); };
+    D.lines.dist.forEach(p => line(p, "rgba(255,255,255,.85)", 0.8));
+    D.lines.bnd.forEach(p => line(p, "#333", 1.2));
+    if (state.cell !== null) {
+      const k = state.cell, la = cellLat(k), lo = cellLon(k);
+      ctx.strokeStyle = "#111"; ctx.lineWidth = 2.5; ctx.strokeRect(X(lo - s / 2) - 3, Y(la + s / 2) - 3, s * kx + 6, s * ky + 6);
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.strokeRect(X(lo - s / 2) - 1, Y(la + s / 2) - 1, s * kx + 2, s * ky + 2);
+    }
+    legend();
+  }
+
+  function shares() {
+    const n = D.i.length, c = [0, 0, 0]; let w = 0;
+    for (let k = 0; k < n; k++) { c[+D.lab[state.set][k][state.di]]++; if (hasWin(state.set, k)) w++; }
+    return { c: c.map(v => v / n), w: w / n };
+  }
+  function pct(v) { return v < 0.01 && v > 0 ? (v * 100).toFixed(1) + "%" : Math.round(v * 100) + "%"; }
+
+  function legend() {
+    const L = document.getElementById("legend"), sh = shares();
+    if (state.view === "depth") {
+      const dep = D.grid[state.di];
+      L.innerHTML = [0, 1, 2].map(x => `<span><span class="sw" style="background:${COL[x]}"></span>${NAME[x]} <span class="sub">${pct(sh.c[x])} of cells at ${dep} m</span></span>`).join("");
+    } else {
+      L.innerHTML = `<span><span class="sw" style="background:${COL[1]}"></span>at least one "not ruled out" depth <span class="sub">${pct(sh.w)} of cells</span></span>` +
+        `<span><span class="sw" style="background:${NOWIN}"></span>no window <span class="sub">${pct(1 - sh.w)}</span></span>` +
+        `<span><span class="sw hatch"></span>nearest surveyed well over 40 km away</span>`;
+    }
+    document.getElementById("setdesc").textContent = SETS[state.set];
+  }
+
+  function profile(k) {
+    state.cell = k; const set = state.set, lab = D.lab[set][k], p = D.p[set][k], lim = D.lim[set][k];
+    document.getElementById("ptitle").textContent = `Depth profile, ${set === "strict" ? "Strict" : "Local"} limits`;
+    const geo = D.geos[D.geo[k]];
+    document.getElementById("pwhere").textContent = `Cell centre ${cellLat(k).toFixed(2)} N, ${cellLon(k).toFixed(2)} E · ${D.coastKm[k]} km from the sea outline · geology from nearest surveyed well (${D.geoKm[k]} km): ${geo}`;
+    const win = D.win[set][k], v = document.getElementById("verdict");
+    if (win === "no window") { v.className = "verdict none"; v.textContent = "No window at this place. No depth is \"not ruled out\"."; }
+    else { v.className = "verdict some"; v.textContent = "Window (not ruled out, lab test lead only): " + win; }
+    const flags = [];
+    if (far(k)) flags.push(`Nearest surveyed well is ${Math.round(D.geoKm[k])} km away (more than 40 km): geology is a guess.`);
+    const zero = D.grid.filter((d, n) => D.ns[k][n] === 0);
+    if (zero.length) flags.push(`No similar-depth surveyed well within 25 km at ${zero.join(", ")} m.`);
+    flags.push("Values are for the cell centre; a place inside the cell can differ (2-3% of surveyed wells did).");
+    document.getElementById("flags").innerHTML = flags.map(f => `<div class="flag">${f}</div>`).join("");
+    document.getElementById("rows").innerHTML = D.grid.map((d, n) => {
+      const L = +lab[n], nk = D.nk[k][n];
+      return `<tr class="${d > 150 ? "deep" : ""}"><td class="num">${d} m</td><td><span class="chip c${L}">${NAME[L]}</span></td>` +
+        `<td class="num">${(p[n] / 100).toFixed(2)}</td><td class="num">${D.ns[k][n]}</td><td class="num">${nk >= 999 ? "none" : nk}</td><td>${LIM[lim.substr(2 * n, 2)]}</td></tr>`;
+    }).join("");
+    document.getElementById("lat").value = cellLat(k).toFixed(3); document.getElementById("lon").value = cellLon(k).toFixed(3);
+    draw();
+  }
+
+  function cellAt(lat, lon) {
+    const i = Math.round((lat - D.lat0) / D.step), j = Math.round((lon - D.lon0) / D.step);
+    return index.has(i * 1000 + j) ? index.get(i * 1000 + j) : null;
+  }
+  function evtCell(ev) {
+    const r = cv.getBoundingClientRect(), x = (ev.clientX - r.left) * W / r.width, y = (ev.clientY - r.top) * H / r.height;
+    return cellAt(LAT0 + (H - y) / ky, LON0 + x / kx);
+  }
+  cv.addEventListener("click", ev => { const k = evtCell(ev); if (k !== null) profile(k); });
+  const tip = document.getElementById("tip");
+  cv.addEventListener("mousemove", ev => {
+    const k = evtCell(ev); if (k === null) { tip.style.display = "none"; return; }
+    const t = state.view === "depth" ? `${D.grid[state.di]} m: ${NAME[+D.lab[state.set][k][state.di]]}` : D.win[state.set][k];
+    tip.textContent = `${cellLat(k).toFixed(2)} N, ${cellLon(k).toFixed(2)} E · ${t}`;
+    tip.style.display = "block"; tip.style.left = Math.min(ev.clientX + 14, window.innerWidth - 270) + "px"; tip.style.top = (ev.clientY + 14) + "px";
+  });
+  cv.addEventListener("mouseleave", () => tip.style.display = "none");
+
+  const press = (on, off) => { on.setAttribute("aria-pressed", "true"); off.setAttribute("aria-pressed", "false"); };
+  const bS = document.getElementById("set-strict"), bL = document.getElementById("set-local");
+  bS.onclick = () => { state.set = "strict"; press(bS, bL); profile(state.cell); };
+  bL.onclick = () => { state.set = "local"; press(bL, bS); profile(state.cell); };
+  const vD = document.getElementById("view-depth"), vW = document.getElementById("view-win"), dep = document.getElementById("depth");
+  vD.onclick = () => { state.view = "depth"; press(vD, vW); dep.disabled = false; draw(); };
+  vW.onclick = () => { state.view = "win"; press(vW, vD); dep.disabled = true; draw(); };
+  dep.oninput = () => { state.di = +dep.value; document.getElementById("depthval").textContent = D.grid[state.di] + " m"; draw(); };
+  document.getElementById("find").addEventListener("submit", ev => {
+    ev.preventDefault(); const la = parseFloat(document.getElementById("lat").value), lo = parseFloat(document.getElementById("lon").value);
+    const k = (isFinite(la) && isFinite(lo)) ? cellAt(la, lo) : null, e = document.getElementById("finderr");
+    if (k === null) { e.textContent = "That point is outside the mapped land cells. Enter a latitude 20.6-26.7 and longitude 88-92.75 inside Bangladesh."; return; }
+    e.textContent = ""; profile(k);
+  });
+  profile(1302);
+};
+
+(function () {
+  const $ = id => document.getElementById(id);
+  const VKEY = "tw-shown-data-version";
+  let shown = null;
+
+  function setNet() {
+    const on = navigator.onLine; const p = $("net");
+    p.textContent = on ? "Online" : "Offline"; p.className = "pill " + (on ? "on" : "off");
+  }
+  window.addEventListener("online", () => { setNet(); checkForUpdate(); });
+  window.addEventListener("offline", setNet);
+
+  function showInfo(v, saved) {
+    $("dver").textContent = v.data_version;
+    $("ddate").textContent = v.published;
+    $("saved").textContent = saved ? "Saved on this device: works without internet." : "Not yet saved for offline use (open once with internet).";
+    $("saved").className = saved ? "ok" : "warnt";
+  }
+  function banner(html, btn, fn) {
+    const b = $("upd"); b.innerHTML = html + (btn ? ` <button class="go" id="updbtn">${btn}</button>` : ""); b.hidden = false;
+    if (btn) $("updbtn").onclick = fn;
+  }
+
+  async function getJSON(url, opts) { const r = await fetch(url, opts); if (!r.ok) throw new Error(url + " " + r.status); return r.json(); }
+
+  async function isSaved(file) {
+    try { if (!("caches" in window)) return false; return !!(await caches.match(file)); } catch (e) { return false; }
+  }
+
+  async function start() {
+    setNet();
+    let v;
+    try { v = await getJSON("version.json", { cache: "no-store" }); }          // service worker: network first, saved copy if offline
+    catch (e) { $("loading").textContent = "No saved data yet. Please open this app once with internet."; return; }
+    let D;
+    try { D = await getJSON(v.data_file); }
+    catch (e) { $("loading").textContent = "The data file could not be loaded. Please connect to the internet once."; return; }
+    shown = v.data_version;
+    let prev = null; try { prev = localStorage.getItem(VKEY); localStorage.setItem(VKEY, shown); } catch (e) {}
+    $("loading").hidden = true; $("appbody").hidden = false;
+    window.__startMap(D);
+    showInfo(v, await isSaved(v.data_file));
+    if (prev && prev !== shown) banner(`Data updated to version <b>${shown}</b>. ${v.notes || ""}`);
+    setTimeout(async () => showInfo(v, await isSaved(v.data_file)), 3000);
+    cleanOldData(v.data_file);
+    setInterval(checkForUpdate, 30 * 60 * 1000);
+  }
+
+  async function cleanOldData(current) {
+    try {
+      const c = await caches.open("tw-data");
+      for (const req of await c.keys()) if (!req.url.endsWith(current)) await c.delete(req);
+    } catch (e) {}
+  }
+
+  async function checkForUpdate() {
+    if (!navigator.onLine || !shown) return;
+    try {
+      const v = await getJSON("version.json", { cache: "no-store" });
+      $("checked").textContent = new Date().toLocaleString();
+      if (v.data_version !== shown) {
+        await getJSON(v.data_file);                                             // download and save the new data now
+        banner(`New data (version <b>${v.data_version}</b>) has been downloaded.`, "Show new data", () => location.reload());
+      }
+    } catch (e) {}
+  }
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").then(reg => {
+      const waiting = w => banner("A new version of the app is ready.", "Reload", () => { w.postMessage("skipWaiting"); });
+      if (reg.waiting && navigator.serviceWorker.controller) waiting(reg.waiting);
+      reg.addEventListener("updatefound", () => {
+        const w = reg.installing;
+        w.addEventListener("statechange", () => { if (w.state === "installed" && navigator.serviceWorker.controller) waiting(w); });
+      });
+      setInterval(() => reg.update().catch(() => {}), 30 * 60 * 1000);
+    }).catch(() => {});
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => { if (!reloaded) { reloaded = true; location.reload(); } });
+  }
+  $("checknow").onclick = () => { $("checked").textContent = navigator.onLine ? "checking..." : "offline, will check when online"; checkForUpdate(); };
+  start().then(() => { if (navigator.onLine) $("checked").textContent = new Date().toLocaleString(); });
+})();
+
+</script>
+</body>
+</html>
