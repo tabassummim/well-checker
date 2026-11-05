@@ -1,8 +1,8 @@
 {
- "data_version": "2026-11-05.1",
- "app_version": "1.0.0",
- "data_file": "data/grid-2026-11-05.1.json",
- "published": "2026-11-05",
- "notes": "First release.",
+ "data_version": "2026-11-06.1",
+ "app_version": "1.1.0",
+ "data_file": "data/grid-2026-11-06.1.json",
+ "published": "2026-11-06",
+ "notes": "Places and well counts.",
  "source": "BGS/DPHE National Hydrochemical Survey 1998-99; Step 5 saved tool (strat_u01)"
 }

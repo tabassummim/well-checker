@@ -1,5 +1,5 @@
 // Service worker for the tubewell screening app. APP_VERSION changes -> browser installs the new app shell.
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.1.0";
 const SHELL = "tw-shell-" + APP_VERSION;
 const DATA = "tw-data";
 const SHELL_FILES = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
